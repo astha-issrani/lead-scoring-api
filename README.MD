@@ -149,4 +149,4 @@ This service is designed to be easily deployed to a cloud platform.
 
 Platform: Render
 
-Live API URL:
+Live API URL: https://lead-scoring-api-reis.onrender.com/
