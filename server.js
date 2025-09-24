@@ -2,15 +2,14 @@ const express = require('express');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
-const { OpenAI } = require('openai'); // Import the OpenAI library
+const { OpenAI } = require('openai');
 
 const app = express();
 const port = 3001;
-
-// Load environment variables (e.g., your OpenAI API key)
+// Load environment variables, OpenAI API key
 require('dotenv').config();
 
-// Initialize OpenAI client with your API key
+// Initialize OpenAI client
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
@@ -23,6 +22,47 @@ const upload = multer({ dest: 'uploads/' });
 let offerDetails = null;
 let leadsToScore = [];
 let scoredLeads = [];
+
+// A mapping for adjacent industries
+const industryAdjacency = {
+    'SaaS': ['Technology', 'Marketing', 'Fintech'],
+    'B2B SaaS': ['Technology', 'Marketing', 'Fintech'],
+    'Marketing': ['Advertising', 'SaaS', 'B2B SaaS'],
+    'Technology': ['SaaS', 'B2B SaaS', 'IT Services'],
+    'Finance': ['Fintech', 'SaaS', 'B2B SaaS']
+};
+
+// Helper function to calculate the rule-based score
+const calculateRuleScore = (lead, offer) => {
+    let score = 0;
+
+    // Role relevance: decision maker (+20), influencer (+10), else 0
+    const role = lead.role.toLowerCase();
+    if (role.includes('head') || role.includes('ceo') || role.includes('director')) {
+        score += 20;
+    } else if (role.includes('manager') || role.includes('influencer')) {
+        score += 10;
+    }
+
+    // Industry match: exact ICP (+20), adjacent (+10), else 0
+    const leadIndustry = lead.industry.toLowerCase();
+    const offerICPs = offer.ideal_use_cases.map(icp => icp.toLowerCase());
+
+    if (offerICPs.includes(leadIndustry)) {
+        score += 20; // Exact match
+    } else if (offerICPs.some(icp => industryAdjacency[icp] && industryAdjacency[icp].map(adj => adj.toLowerCase()).includes(leadIndustry))) {
+        score += 10; // Adjacent match
+    }
+
+    // Data completeness: all fields present (+10)
+    const requiredFields = ['name', 'role', 'company', 'industry', 'location', 'linkedin_bio'];
+    const isComplete = requiredFields.every(field => lead[field] && lead[field].trim() !== '');
+    if (isComplete) {
+        score += 10;
+    }
+
+    return score;
+};
 
 // Helper function to get AI-based score and reasoning
 const getAIResponse = async (lead, offer) => {
@@ -38,7 +78,7 @@ const getAIResponse = async (lead, offer) => {
 
     try {
         const response = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: "gpt-3.5-turbo", // Or "gemini-pro"
             messages: [{ role: "user", content: prompt }],
             max_tokens: 100,
         });
@@ -94,7 +134,7 @@ app.post('/leads/upload', upload.single('leads_file'), (req, res) => {
         });
 });
 
-// POST /score (Only includes AI scoring)
+// POST /score
 app.post('/score', async (req, res) => {
     if (!offerDetails || leadsToScore.length === 0) {
         return res.status(400).json({ message: 'Please upload offer details and leads first.' });
@@ -102,10 +142,14 @@ app.post('/score', async (req, res) => {
 
     const newScoredLeads = [];
     for (const lead of leadsToScore) {
+        // Calculate Rule Score
+        const ruleScore = calculateRuleScore(lead, offerDetails);
+
+        // Get AI Score and Reasoning
         const { intent, aiPoints, reasoning } = await getAIResponse(lead, offerDetails);
-        
-        // Final score is based only on AI points
-        const finalScore = aiPoints; 
+
+        // Calculate Final Score
+        const finalScore = ruleScore + aiPoints;
 
         newScoredLeads.push({
             name: lead.name,
@@ -117,7 +161,7 @@ app.post('/score', async (req, res) => {
         });
     }
 
-    scoredLeads = newScoredLeads;
+    scoredLeads = newScoredLeads; // Store the final results
     res.status(200).json({ message: 'Scoring complete.', count: scoredLeads.length });
 });
 
