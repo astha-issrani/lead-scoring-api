@@ -10,6 +10,8 @@ This project is a backend service designed to process and score sales leads base
 
 ~ AI Integration: Utilizes an AI model (OpenAI in this case) to classify lead intent and provide reasoning.
 
+~ Bonus: CSV Export: An optional endpoint to download the scored leads as a CSV file.
+
 ## Getting Started
 ### Prerequisites
 Node.js (version 14 or higher) npm
@@ -106,6 +108,20 @@ Set the method to GET.
 Enter the URL: http://localhost:3001/results.
 No body or additional headers are required.
 Click Send.
+
+### (Bonus) GET /results/export
+This endpoint returns the final scored leads as a downloadable CSV file. It must be called after the /score endpoint has been successfully executed.
+
+Method: GET
+URL: http://localhost:3001/results/export
+
+Postman steps to download the file:
+
+In Postman, set the request method to GET and enter the URL.
+
+Click the arrow next to the Send button and select Send and Download.
+
+A dialog box will appear, asking you where to save the file. Choose a location on your computer and save the file with a .csv extension.
 
 ## Scoring Logic Explained
 Each lead's final score is the sum of a rule-based score (max 50 points) and an AI-based score (max 50 points).

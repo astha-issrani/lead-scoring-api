@@ -173,6 +173,32 @@ app.get('/results', (req, res) => {
     res.status(200).json(scoredLeads);
 });
 
+const { Parser } = require('json2csv');
+
+// GET /results/export: Allows users to download results as a CSV file
+app.get('/results/export', (req, res) => {
+    if (scoredLeads.length === 0) {
+        return res.status(404).json({ message: 'No results found. Please run the /score endpoint first.' });
+    }
+
+    const fields = ['name', 'role', 'company', 'intent', 'score', 'reasoning'];
+    const opts = { fields };
+
+    try {
+        const parser = new Parser(opts);
+        const csv = parser.parse(scoredLeads);
+
+        // Set headers to trigger a file download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=scored_leads.csv');
+        
+        res.status(200).send(csv);
+    } catch (err) {
+        console.error('Error converting to CSV:', err);
+        res.status(500).json({ message: 'Error exporting results as CSV.' });
+    }
+});
+
 app.get('/', (req, res) => {
     res.send('Lead Scoring API is running!');
 });
